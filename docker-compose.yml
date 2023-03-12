@@ -1,0 +1,11 @@
+version: '3.0'
+services:
+  dawstream-database:
+    container_name: dawstream-database
+    image: postgres:15.2
+    network_mode: host
+    environment:
+      POSTGRES_PASSWORD: complexpassword
+      POSTGRES_USER: dawstream
+      POSTGRES_DB: dawstream
+      PGPORT: 5090

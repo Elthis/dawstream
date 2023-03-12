@@ -8,7 +8,7 @@ use dawlib::{MidiKey, InstrumentPayloadDto, InstrumentDto};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Store)]
 pub struct InstrumentState {
-    pub entries: HashMap<&'static str, HashMap<usize, Vec<MidiKey>>>,
+    pub entries: HashMap<String, HashMap<usize, Vec<MidiKey>>>,
 }
 
 impl From<InstrumentState> for InstrumentPayloadDto {
@@ -16,12 +16,25 @@ impl From<InstrumentState> for InstrumentPayloadDto {
         let instruments = state.entries.into_iter()
         .map(|(instrument, notes)| {
             InstrumentDto {
-                name: instrument.to_string(),
+                name: instrument,
                 notes
             }
         }).collect();
 
         InstrumentPayloadDto { instruments }
+    }
+}
+
+impl From<InstrumentPayloadDto> for InstrumentState {
+    fn from(payload: InstrumentPayloadDto) -> Self {
+        let entries = payload.instruments.into_iter()
+        .map(|instrument| {
+            (instrument.name, instrument.notes)
+        }).collect();
+
+        InstrumentState {
+            entries
+        }
     }
 }
 
@@ -130,7 +143,6 @@ pub fn piano_roll_key(props: &PianoRollKeyComponentProperties) -> Html {
         "text-black bg-white"
     };
     let (state, dispatch) = use_store::<InstrumentState>();
-    log!("State: ", format!("{state:#?}"));
     let instrument_name = props.instrument_name;
     let midi_key = props.midi_key;
     let piano_roll_entries = (0..24).map(|index| {
@@ -138,7 +150,7 @@ pub fn piano_roll_key(props: &PianoRollKeyComponentProperties) -> Html {
         let state = state.clone();
         let dispatch = dispatch.clone();
         let on_click = dispatch.reduce_mut_callback(move |state| {
-            let instrument = state.entries.entry(instrument_name).or_default();
+            let instrument = state.entries.entry(instrument_name.to_string()).or_default();
             let keys = instrument.entry(index).or_default();
             if keys.contains(&midi_key) {
                 let mut filtered_keys = keys.iter()

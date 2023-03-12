@@ -1,8 +1,11 @@
+use dawlib::DawstreamBackendClient;
+use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
+use yewdux::prelude::use_store;
 
-use crate::{workerconsumer::{PlayButtonComponent}, instrument::InstrumentsComponent};
+use crate::{play::{PlayButtonComponent}, instrument::{InstrumentsComponent, InstrumentState}};
 
-pub mod workerconsumer;
+pub mod play;
 pub mod worker;
 
 mod instrument;
@@ -24,6 +27,7 @@ pub fn app() -> Html {
 
 #[function_component(TopNav)]
 pub fn top_nav() -> Html {
+    let (instrument_state, instrument_state_dispatch) = use_store::<InstrumentState>();
     let menu_toggle = use_state(|| false);
 
     let onclick = {
@@ -36,6 +40,25 @@ pub fn top_nav() -> Html {
     } else {
         "hidden"
     };
+
+    let on_store = move |_|  {
+        let instrument_state = instrument_state.clone();
+        spawn_local(async move {
+            let client =  DawstreamBackendClient::new();
+            
+            client.store_state(&instrument_state.as_ref().clone().into()).await.unwrap();
+        });
+    };
+
+    let on_restore = move |_| { 
+        let instrument_state_dispatch = instrument_state_dispatch.clone();
+        spawn_local(async move {
+            let client =  DawstreamBackendClient::new();
+            let restored_state = client.restore_state().await.unwrap();
+            instrument_state_dispatch.set(restored_state.into());
+        })
+    };
+
 
     html! {
         <nav class="flex items-center justify-between flex-wrap bg-gray-800 p-3 sticky top-0 z-10">
@@ -51,11 +74,11 @@ pub fn top_nav() -> Html {
             </div>
             <div class={format!("w-full block flex-grow lg:flex lg:items-center lg:w-auto {menu_state} lg:visible")}>
                 <div class="text-sm flex-col lg:flex-grow">
-                    <a href="#test" class="block mt-4 lg:inline-block lg:mt-0 text-teal-100 hover:text-white mr-4">
-                        {"File"}
+                    <a onclick={on_store} class="block mt-4 lg:inline-block lg:mt-0 text-teal-100 hover:text-white mr-4 cursor-pointer">
+                        {"Store"}
                     </a>
-                    <a href="#test" class="block mt-4 lg:inline-block lg:mt-0 text-teal-100 hover:text-white mr-4">
-                        {"Edit"}
+                    <a onclick={on_restore} class="block mt-4 lg:inline-block lg:mt-0 text-teal-100 hover:text-white mr-4 cursor-pointer">
+                        {"Restore"}
                     </a>
                     <a class="block mt-4 lg:inline-block lg:mt-0 text-gray-400 cursor-not-allowed">
                         {"Help"}

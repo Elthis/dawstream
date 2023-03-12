@@ -8,7 +8,7 @@ use yew::platform::spawn_local;
 use yew_agent::{WorkerLink, Public, HandlerId};
 use gloo_console::log;
 
-use crate::workerconsumer::CHUNK_LENGTH;
+use crate::play::CHUNK_LENGTH;
 
 pub struct AudioStreamingWorker {
     _link: WorkerLink<Self>,

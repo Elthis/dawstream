@@ -4,5 +4,6 @@ members = [
     "dawbackend",
     "dawclient",
     "dawmacros",
-    "dawlib"
+    "dawlib",
+    "migration"
 ]
