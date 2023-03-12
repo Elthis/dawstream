@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "dawbackend",
+    "dawclient",
+    "dawmacros",
+    "dawlib"
+]
