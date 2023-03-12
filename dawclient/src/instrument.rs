@@ -6,7 +6,7 @@ use yewdux::{store::Store, prelude::use_store};
 
 use dawlib::{MidiKey, InstrumentPayloadDto, InstrumentDto};
 
-#[derive(Debug, Default, Clone, PartialEq, Store)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Store)]
 pub struct InstrumentState {
     pub entries: HashMap<&'static str, HashMap<usize, Vec<MidiKey>>>,
 }
@@ -152,11 +152,7 @@ pub fn piano_roll_key(props: &PianoRollKeyComponentProperties) -> Html {
                 log!("Hello");
             }
         });
-        let is_set = if state.entries.get(instrument_name).map(|keys| keys.get(&index)).flatten().filter(|keys| keys.contains(&midi_key)).is_some() {
-            true
-        } else {
-            false
-        };
+        let is_set = state.entries.get(instrument_name).and_then(|keys| keys.get(&index)).filter(|keys| keys.contains(&midi_key)).is_some();
 
 
 

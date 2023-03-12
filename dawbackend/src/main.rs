@@ -5,13 +5,11 @@ use axum::{
     },
     response::IntoResponse,
     routing::get,
-    Router, http::StatusCode,
+    Router,
 };
-use dawlib::{MidiKey, InstrumentPayloadDto};
-use headers::Header;
-use tracing::trace;
+use dawlib::InstrumentPayloadDto;
 
-use std::{borrow::Cow, time::Duration};
+use std::time::Duration;
 use std::ops::ControlFlow;
 use std::{net::SocketAddr, path::PathBuf};
 use tower_http::{
@@ -20,13 +18,10 @@ use tower_http::{
 };
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use wavegen::{wf, sine, dc_bias, sawtooth, square, Waveform, WaveformIterator, Precision};
+use wavegen::{wf, sine, sawtooth, square, Waveform, WaveformIterator};
 
-//allows to extract the IP of connecting user
 use axum::extract::connect_info::ConnectInfo;
-use axum::extract::ws::CloseFrame;
 
-//allows to split the websocket stream into separate TX and RX branches
 use futures::{sink::SinkExt, stream::{StreamExt, SplitSink}};
 
 #[tokio::main]
@@ -41,17 +36,14 @@ async fn main() {
 
     let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
 
-    // build our application with some routes
     let app = Router::new()
         .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
         .route("/ws", get(ws_handler))
-        // logging so we can see whats going on
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         );
 
-    // run it with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
@@ -61,11 +53,6 @@ async fn main() {
 }
 
 
-/// The handler for the HTTP request (this gets called when the HTTP GET lands at the start
-/// of websocket negotiation). After this completes, the actual switching from HTTP to
-/// websocket protocol will occur.
-/// This is the last point where we can extract TCP/IP metadata such as IP address of the client
-/// as well as things from HTTP headers such as user-agent of the browser etc.
 async fn ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
@@ -77,20 +64,14 @@ async fn ws_handler(
         String::from("Unknown browser")
     };
     println!("`{user_agent}` at {addr} connected.");
-    // finalize the upgrade process by returning upgrade callback.
-    // we can customize the callback by sending additional info such as address.
+
     ws.on_upgrade(move |socket| handle_socket(socket, addr))
 }
 
-/// Actual websocket statemachine (one will be spawned per connection)
 async fn handle_socket(socket: WebSocket, who: SocketAddr) {
     let (mut sender, mut receiver) = socket.split();
 
     loop {
-        // receive single message from a client (we can either receive or send with socket).
-        // this will likely be the Pong for our Ping or a hello message from client.
-        // waiting for message from a client will block this task, but will not block other client's
-        // connections.
         if let Some(msg) = receiver.next().await {
             println!("There is a mesage");
             if let Ok(msg) = msg {
@@ -105,36 +86,6 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr) {
             println!("Nothing");
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-
-        // By splitting socket we can send and receive at the same time. In this example we will send
-        // unsolicited messages to client based on some sort of server's internal event (i.e .timer).
-
-
-        // Spawn a task that will push several messages to the client (does not matter what client does)
-        
-        // let chunk_length = 4;
-        // let waveform = wf!(f32, 44100., sine!(MidiKey::G1.frequency()), sawtooth!(MidiKey::C4.frequency()), sawtooth!(MidiKey::E2.frequency()));
-        // let mut iter = waveform.iter().take(44100 * chunk_length * 20).collect::<Vec<f32>>();
-        // let n_msg = 20;
-        // for i in 0..n_msg {
-        //     // In case of any websocket error, we exit.
-        //     let samples = iter.drain(0..44100 * chunk_length)
-        //     .collect::<Vec<f32>>();
-
-        //     let mut bytes = samples.into_iter()
-        //     .flat_map(|it| it.to_le_bytes())
-        //     .collect::<Vec<u8>>();
-        //     bytes.append(&mut bytes.clone());
-
-            
-        //     if sender
-        //         .send(Message::Binary(bytes))
-        //         .await
-        //         .is_err()
-        //     {
-        //         return;
-        //     }
-        // }
     }
 }
 
@@ -153,7 +104,7 @@ impl MusicBox {
         if let Some(sawtooth_instrument) = payload.instruments.iter().find(|instrument| instrument.name == "sawtooth")  {
             for i in 0..=end {
                 if let Some(notes) = sawtooth_instrument.notes.get(&i) {
-                    let mut waveforms = notes.iter()
+                    let waveforms = notes.iter()
                     .map(|key| wf!(f32, 44100., sawtooth!(key.frequency())))
                     .collect::<Vec<Waveform<f32>>>();
 
@@ -184,7 +135,7 @@ impl MusicBox {
         if let Some(sawtooth_instrument) = payload.instruments.iter().find(|instrument| instrument.name == "sine")  {
             for i in 0..=end {
                 if let Some(notes) = sawtooth_instrument.notes.get(&i) {
-                    let mut waveforms = notes.iter()
+                    let waveforms = notes.iter()
                     .map(|key| wf!(f32, 44100., sine!(key.frequency())))
                     .collect::<Vec<Waveform<f32>>>();
 
@@ -215,7 +166,7 @@ impl MusicBox {
         if let Some(sawtooth_instrument) = payload.instruments.iter().find(|instrument| instrument.name == "square")  {
             for i in 0..=end {
                 if let Some(notes) = sawtooth_instrument.notes.get(&i) {
-                    let mut waveforms = notes.iter()
+                    let waveforms = notes.iter()
                     .map(|key| wf!(f32, 44100., square!(key.frequency())))
                     .collect::<Vec<Waveform<f32>>>();
 
@@ -250,7 +201,7 @@ impl MusicBox {
 
         zipped_fragments.into_iter().map(|fragment|{
             let mut fragment_chunks = fragment.into_iter()
-            .filter_map(|fragment| fragment)
+            .flatten()
             .collect::<Vec<_>>();
             if fragment_chunks.is_empty() {
                 vec![0.0f32; 44100]
@@ -258,7 +209,7 @@ impl MusicBox {
                 let count = fragment_chunks.len() as f32;
                 let mut result = fragment_chunks.pop().unwrap();
                 for item in result.iter_mut() {
-                    *item = *item / count;
+                    *item /= count;
                 }
                 for other_chunk in fragment_chunks {
                     for (index, value) in other_chunk.iter().enumerate() {
@@ -271,7 +222,7 @@ impl MusicBox {
     }
 }
 
-/// helper to print contents of messages to stdout. Has special treatment for Close.
+
 async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<WebSocket, Message>) -> ControlFlow<(), ()> {
     match msg {
         Message::Text(t) => {
@@ -279,11 +230,7 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
             if let Ok(payload) = serde_json::from_str::<InstrumentPayloadDto>(&t) {
                 let chunks = MusicBox::generate(&payload);
 
-                for (index, chunk) in chunks.into_iter().enumerate() {
-                    //     // In case of any websocket error, we exit.
-                    //     let samples = iter.drain(0..44100 * chunk_length)
-                    //     .collect::<Vec<f32>>();
-            
+                for (index, chunk) in chunks.into_iter().enumerate() {            
                     println!("Sent chunk {index}");
                     let bytes = chunk.into_iter()
                         .flat_map(|it| it.to_le_bytes())
@@ -322,9 +269,7 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
         Message::Pong(v) => {
             println!(">>> {} sent pong with {:?}", who, v);
         }
-        // You should never need to manually handle Message::Ping, as axum's websocket library
-        // will do so for you automagically by replying with Pong and copying the v according to
-        // spec. But if you need the contents of the pings you can see them here.
+
         Message::Ping(v) => {
             println!(">>> {} sent ping with {:?}", who, v);
         }

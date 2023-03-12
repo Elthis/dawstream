@@ -53,7 +53,7 @@ pub fn generate_keys(_: TokenStream) -> TokenStream {
 
     let mappings = keys.iter()
         .map(|key| {
-            let MidiKey {ident, frequency, is_step_key } = key;
+            let MidiKey {ident, frequency, is_step_key: _ } = key;
             quote! {
                 MidiKey::#ident => #frequency,
             }
@@ -62,7 +62,7 @@ pub fn generate_keys(_: TokenStream) -> TokenStream {
     
     let names = keys.iter()
         .map(|key| {
-            let MidiKey {ident, frequency, is_step_key } = key;
+            let MidiKey {ident, frequency: _, is_step_key: _ } = key;
             let name = ident.to_string();
             quote! {
                 MidiKey::#ident => #name,
@@ -72,7 +72,7 @@ pub fn generate_keys(_: TokenStream) -> TokenStream {
 
     let step_keys = keys.iter()
         .map(|key| {
-            let MidiKey {ident, frequency, is_step_key } = key;
+            let MidiKey {ident, frequency: _, is_step_key } = key;
             quote! {
                 MidiKey::#ident => #is_step_key,
             }

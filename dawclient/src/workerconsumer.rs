@@ -1,12 +1,12 @@
-use std::{collections::VecDeque, rc::Rc, sync::{RwLock, atomic::AtomicBool}, time::Duration};
+use std::{rc::Rc, sync::{RwLock}};
 
-use futures::StreamExt;
 use gloo_console::{__macro::JsValue, log};
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{AudioBuffer, AudioBufferSourceNode, AudioNode, HtmlInputElement, OscillatorType, AudioContext};
-use yew::{prelude::*, platform::time::interval};
-use yew_agent::{Bridge, Bridged, use_bridge};
-use yewdux::{prelude::{use_store, use_store_value}, store::Store};
+use web_sys::{AudioBufferSourceNode, AudioNode, AudioContext};
+
+use yew_agent::use_bridge;
+use yew::prelude::*;
+use yewdux::prelude::*;
 
 use crate::{worker::{AudioStreamingWorker, AudioStreamingWorkerInput, AudioStreamingWorkerOutput}, instrument::InstrumentState};
 
@@ -24,7 +24,7 @@ struct AudioStreamer {
 
 impl Drop for AudioStreamer {
     fn drop(&mut self) {
-        self.ctx.close().unwrap();
+        self.ctx.close().unwrap().is_undefined();
     }
 }
 
@@ -50,9 +50,9 @@ impl AudioStreamer {
     }
 
     fn state(&self) -> StreamerState {
-        if self.scheduled.len() != 0 {
+        if !self.scheduled.is_empty() {
             StreamerState::PLAYING
-        } else if self.chunks.len() != 0 {
+        } else if !self.chunks.is_empty() {
             StreamerState::WAITING
         } else {
             StreamerState::EMPTY
@@ -73,7 +73,7 @@ impl AudioStreamer {
             self.ctx.create_buffer(2, (self.ctx.sample_rate()) as u32 * CHUNK_LENGTH, self.ctx.sample_rate())?;
 
             for (channel_number, channel_data) in chunk.iter().enumerate() {
-                audio_buffer.copy_to_channel_with_start_in_channel(&channel_data, channel_number as i32, 0)?;
+                audio_buffer.copy_to_channel_with_start_in_channel(channel_data, channel_number as i32, 0)?;
             }
 
             let buffer_source = self.ctx.create_buffer_source().unwrap();
