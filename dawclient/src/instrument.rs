@@ -48,55 +48,56 @@ pub struct NoteData {
 pub fn instruments() -> Html {
     html! {
         <div class="grid grid-cols-1">
-            <SawToothInstrumentComponent/>
-            <SquareInstrumentComponent/>
-            <SineInstrumentComponent/>
+            <InstrumentComponent name={"sawtooth"}/>
+            <InstrumentComponent name={"square"}/>
+            <InstrumentComponent name={"sine"}/>
         </div>
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Properties)]
+pub struct InstrumentComponentProperties {
+    name: &'static str
+}
 
-#[function_component(SawToothInstrumentComponent)]
-pub fn saw_tooth_instrument() -> Html {
+trait Capitalize {
+    fn capitalize(&self) -> String;
+}
+
+impl <T: AsRef<str>> Capitalize for T {
+    fn capitalize(&self) -> String {
+        let mut chars = self.as_ref().chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+        }    
+    }
+}
+
+#[function_component(InstrumentComponent)]
+pub fn instrument(props: &InstrumentComponentProperties) -> Html {
     html! {
-        <div class="flex border-t border-gray-600 text-white bg-gray-700">
-            <div class="shrink p-4 w-36">
-                {"Sawtooth ΛΛΛ"}
-            </div>   
-            <div class="grow border-l-8 border-black">
-                <PianoRollComponent instrument_name={"sawtooth"}/>
-            </div> 
-        </div>
+        <>
+            <div class="flex border-t border-gray-600 text-white bg-gray-800">
+                <div class="shrink p-1 pl-4  w-36">
+                    {props.name.capitalize()}
+                </div>   
+                <div class="grow border-l border-gray-600 bg-gray-800">
+                    <div class="shrink p-1 pl-2 w-12"> {"Note"} </div>
+                </div> 
+            </div>
+            <div class="flex border-t border-gray-600 text-white bg-gray-700">
+                <div class="shrink p-4 w-36">
+                    
+                </div>   
+                <div class="grow border-l-4 border-black">
+                    <PianoRollComponent instrument_name={props.name}/>
+                </div> 
+            </div>
+        </>
     }
 }
 
-#[function_component(SquareInstrumentComponent)]
-pub fn square_instrument() -> Html {
-    html! {
-        <div class="flex border-t border-gray-600 text-white bg-gray-700">
-            <div class="shrink p-4 w-36">
-                {"Square ⎍"}
-            </div>   
-            <div class="grow border-l-8 border-black">
-                <PianoRollComponent instrument_name={"square"}/>
-            </div> 
-        </div>
-    }
-}
-
-#[function_component(SineInstrumentComponent)]
-pub fn sine_instrument() -> Html {
-    html! {
-        <div class="flex border-t border-gray-600 text-white bg-gray-700">
-            <div class="shrink p-4 w-36">
-                {"Sine ∿"}
-            </div>   
-            <div class="grow border-l-8 border-black">
-                <PianoRollComponent instrument_name={"sine"} />
-            </div> 
-        </div>
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Properties)]
 pub struct PianoRollComponentProperties {
@@ -142,6 +143,7 @@ pub fn piano_roll_key(props: &PianoRollKeyComponentProperties) -> Html {
     } else {
         "text-black bg-white"
     };
+
     let (state, dispatch) = use_store::<InstrumentState>();
     let instrument_name = props.instrument_name;
     let midi_key = props.midi_key;

@@ -61,7 +61,7 @@ pub fn top_nav() -> Html {
 
 
     html! {
-        <nav class="flex items-center justify-between flex-wrap bg-gray-800 p-3 sticky top-0 z-10">
+        <nav class="flex items-center justify-between flex-wrap bg-gray-900 p-3 sticky top-0 z-10">
             <div class="flex items-center flex-shrink-0 text-white mr-6">
                 <span class="text-xl tracking-tight mr-2" width="54" height="54">{ "🎹" }</span>
                 <span class="font-semibold tracking-tight mr-4">{ "Dawstream" }</span>

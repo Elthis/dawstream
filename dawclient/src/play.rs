@@ -19,18 +19,13 @@ pub enum Message {
 struct AudioStreamer {
     ctx: AudioContext,
     chunks: Vec<Vec<Vec<f32>>>,
-    scheduled: Vec<AudioBufferSourceNode>
+    scheduled: Vec<AudioBufferSourceNode>,
+    on_end: Option<Callback<(), ()>>
 }
 
 impl Drop for AudioStreamer {
     fn drop(&mut self) {
         self.ctx.close().unwrap().is_undefined();
-    }
-}
-
-impl Default for AudioStreamer {
-    fn default() -> Self {
-        Self::empty().unwrap()
     }
 }
 
@@ -45,7 +40,8 @@ impl AudioStreamer {
         Ok(Self {
             ctx,
             chunks: vec![],
-            scheduled: vec![]
+            scheduled: vec![],
+            on_end: None
         })
     }
 
@@ -59,6 +55,10 @@ impl AudioStreamer {
         }
     }
 
+    fn set_on_ended(&mut self, callback: Callback<(), ()> ) {
+        self.on_end = Some(callback);
+    }
+
     fn push_chunk(&mut self, chunk: Vec<Vec<f32>>) {
         self.chunks.push(chunk);
     }
@@ -67,7 +67,7 @@ impl AudioStreamer {
     fn play(&mut self) -> Result<(), JsValue> {
         self.stop()?;
         let current_time = self.ctx.current_time();
-        
+        let last_chunk_index = self.chunks.len() - 1;
         for (index, chunk) in self.chunks.iter().enumerate() {
             let audio_buffer =
             self.ctx.create_buffer(2, (self.ctx.sample_rate()) as u32 * CHUNK_LENGTH, self.ctx.sample_rate())?;
@@ -81,17 +81,23 @@ impl AudioStreamer {
             buffer_source.connect_with_audio_node(
                 wasm_bindgen::JsCast::dyn_ref::<AudioNode>(&self.ctx.destination()).unwrap(),
             ).unwrap();
+            let on_end = self.on_end.clone();
 
-            let cb: Closure<dyn FnMut() -> Result<(), JsValue>> = Closure::new(move || {
-                log!("Ended");
-                Ok(())
-            });
-
+            if index == last_chunk_index {
+                let cb: Closure<dyn FnMut() -> Result<(), JsValue>> = Closure::new(move || {
+                    if let Some(on_end) = &on_end {
+                        on_end.emit(());
+                    }         
+                    Ok(())
+                });
+                buffer_source
+                    .add_event_listener_with_callback("ended", cb.as_ref().unchecked_ref()).unwrap();
+                cb.forget();
+            }
             
-            buffer_source
-                .add_event_listener_with_callback("ended", cb.as_ref().unchecked_ref()).unwrap();
+            
             buffer_source.start_with_when(index as f64 * CHUNK_LENGTH as f64 + current_time).unwrap();
-            cb.forget();
+            
             self.scheduled.push(buffer_source);
         }
 
@@ -119,8 +125,18 @@ enum StreamerState {
 
 #[function_component(PlayButtonComponent)]
 pub fn play_button() -> Html {
-    let audio_streamer = use_state(|| Rc::new(RwLock::new(AudioStreamer::empty().unwrap())));
     let audio_streamer_state = use_state(|| StreamerState::EMPTY);
+    let audio_streamer = use_state(|| Rc::new(RwLock::new(AudioStreamer::empty().unwrap())));
+
+    {
+        let audio_streamer_state = audio_streamer_state.clone();
+        let audio_streamer_handle = audio_streamer.clone();
+        audio_streamer.write().unwrap().set_on_ended(Callback::from(move |_| {
+            audio_streamer_handle.write().unwrap().stop().unwrap();
+            audio_streamer_state.set(audio_streamer_handle.read().unwrap().state());
+        }));
+    }
+
     let instruments = use_store_value::<InstrumentState>();
     let worker_bridge = {
         let audio_streamer = audio_streamer.clone();
@@ -137,16 +153,13 @@ pub fn play_button() -> Html {
 
     match *audio_streamer_state {
         StreamerState::EMPTY => {
-            let play = move |_| {
-                log!("Sending");
+            let download = move |_| {
                 worker_bridge.send(AudioStreamingWorkerInput::SendInstrument(
                     instruments.as_ref().clone().into()
                 ));
-                audio_streamer.write().unwrap().play().unwrap();
-                audio_streamer_state.set(audio_streamer.read().unwrap().state());
             };
             html! {
-                <button class={format!("bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={play}> {"⏵"} </button>
+                <button class={format!("bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={download}> {"↓"} </button>
             }
         },
         StreamerState::PLAYING => {

@@ -19,6 +19,7 @@ dawlib = { path = "../dawlib" }
 yewdux = "0.9.2"
 claxon= "0.4.3"
 serde_json = "1.0"
+yew-hooks = "0.2.0"
 
 [dependencies.web-sys]
 version = "0.3.4"

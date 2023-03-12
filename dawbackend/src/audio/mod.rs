@@ -11,9 +11,15 @@ impl MusicBox {
         let mut sawtooth = vec![];
         let mut sine = vec![];
         let mut square = vec![];
-        let end = instruments.iter().map(|instrument| {
-            instrument.notes.keys().max().copied().unwrap_or(0)
-        }).max().unwrap_or(0);
+        let end = instruments.iter().filter_map(|instrument| {
+            instrument.notes.keys().max().copied()
+        }).max();
+
+        if end.is_none() {
+            return vec![];
+        }
+
+        let end = end.unwrap();
 
         if let Some(sawtooth_instrument) = instruments.iter().find(|instrument| instrument.name == "sawtooth")  {
             for i in 0..=end {
@@ -113,7 +119,7 @@ impl MusicBox {
             .collect::<Vec<_>>();
 
             if fragment_chunks.is_empty() {
-                vec![0.0f32; 44100]
+                vec![0.0f32; 88200]
             } else {
                 let count = fragment_chunks.len() as f32;
                 let mut result = fragment_chunks.pop().unwrap();
