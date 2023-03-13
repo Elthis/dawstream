@@ -79,6 +79,8 @@ pub fn generate_keys(_: TokenStream) -> TokenStream {
         })
         .collect::<Vec<proc_macro2::TokenStream>>();
 
+    let idents_count = idents.len();
+
     quote! {
         #[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, serde::Serialize, serde::Deserialize)]
         pub enum MidiKey {
@@ -103,6 +105,10 @@ pub fn generate_keys(_: TokenStream) -> TokenStream {
                     #(#step_keys)*
                 }
             }
+
+            pub const VALUES: [Self; #idents_count] = [
+                #(Self::#idents),*
+            ];
         }
     }.into()
 }

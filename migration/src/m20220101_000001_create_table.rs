@@ -34,7 +34,7 @@ impl MigrationTrait for Migration {
 
 
 #[derive(Iden)]
-enum Track {
+pub enum Track {
     Table,
     Id,
     Name,

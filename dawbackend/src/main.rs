@@ -7,7 +7,8 @@ use axum::{
     routing::get,
     Router,
 };
-use std::{net::SocketAddr, env};
+use tracing::debug;
+use std::{net::SocketAddr, env, error::Error};
 use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer}, cors::CorsLayer,
 };
@@ -19,16 +20,16 @@ mod track;
 mod dal;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn Error>>{
+    dotenvy::dotenv().ok();
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "example_websockets=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "dawbackend=debug,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    dotenvy::dotenv().ok();
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set in .env file");
 
     let database_connection = sea_orm::Database::connect(db_url)
@@ -36,9 +37,9 @@ async fn main() {
         .expect("Database connection failed");
     
     let cors = CorsLayer::new()
-        .allow_methods(tower_http::cors::Any {})
-        .allow_headers(tower_http::cors::Any {})
-        .allow_origin(tower_http::cors::Any {});
+        .allow_methods(tower_http::cors::Any)
+        .allow_headers(tower_http::cors::Any)
+        .allow_origin(tower_http::cors::Any);
     
     let state = AppState { database_connection };
 
@@ -56,8 +57,8 @@ async fn main() {
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await
-        .unwrap();
+        .await?;
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -75,7 +76,7 @@ async fn establish_ws_connection(
     } else {
         String::from("Unknown browser")
     };
-    println!("`{user_agent}` at {addr} connected.");
+    debug!("`{user_agent}` at {addr} connected.");
 
     ws.on_upgrade(move |socket| audio::streaming::handle_connection(socket, addr))
 }

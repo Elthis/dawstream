@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use gloo_console::log;
+use wasm_bindgen::JsCast;
+use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yewdux::{store::Store, prelude::use_store};
 
@@ -76,25 +78,85 @@ impl <T: AsRef<str>> Capitalize for T {
 
 #[function_component(InstrumentComponent)]
 pub fn instrument(props: &InstrumentComponentProperties) -> Html {
+    let is_piano_roll_visible = use_state(|| false);
+
+    let piano_roll = if *is_piano_roll_visible {
+        html! {
+            <div class={format!("grow border-l-4 border-black")}>
+                <PianoRollComponent instrument_name={props.name}/>
+            </div> 
+        }
+    } else {
+        html! {
+            <div class={format!("grow")}>
+            </div> 
+        }
+    };
+
+    let notes_prefix = if *is_piano_roll_visible {
+        "Hide"
+    } else {
+        "Show"
+    };
+
+    let on_visibility_click = {
+        let is_piano_roll_visible = is_piano_roll_visible.clone();
+        move |_| {
+            is_piano_roll_visible.set(!*is_piano_roll_visible)
+        }   
+    };
+
     html! {
         <>
             <div class="flex border-t border-gray-600 text-white bg-gray-800">
-                <div class="shrink p-1 pl-4  w-36">
-                    {props.name.capitalize()}
+                <div class="shrink p-1 pl-4 w-36">
+                    <p class="text-xs"> {"Instrument"} </p>
+                    <p class="text-ss"> {props.name.capitalize()} </p>
                 </div>   
-                <div class="grow border-l border-gray-600 bg-gray-800">
-                    <div class="shrink p-1 pl-2 w-12"> {"Note"} </div>
+                <div class="flex grow border-l border-gray-600 bg-gray-800 text-teal-100 hover:text-white text-xs pt-1">
+                    <div class="shrink p-1 pl-2 cursor-pointer text-center" onclick={on_visibility_click}> 
+                        <p> {notes_prefix} </p>
+                        <p> {"Piano Roll"} </p>
+                    </div>
+                    <div class="grow"></div>
                 </div> 
             </div>
-            <div class="flex border-t border-gray-600 text-white bg-gray-700">
+            <div class="flex text-white bg-gray-700">
                 <div class="shrink p-4 w-36">
-                    
+                    <VolumeComponent instrument_name={props.name}/>
                 </div>   
-                <div class="grow border-l-4 border-black">
-                    <PianoRollComponent instrument_name={props.name}/>
-                </div> 
+                {piano_roll}
             </div>
         </>
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Properties)]
+pub struct VolumeComponentProperties {
+    pub instrument_name: &'static str
+}
+
+
+#[function_component(VolumeComponent)]
+pub fn volume_component(props: &VolumeComponentProperties) -> Html{
+    let component_id = format!("{}VolumeRangeSlider", props.instrument_name);
+    let volume_value = use_state(|| 100.0);
+    let on_change = {
+        let volume_value = volume_value.clone();
+        move |event: yew::events::Event| {
+            let input = event.target().and_then(|t| t.dyn_into::<HtmlInputElement>().ok());
+
+            if let Some(input) = input {
+                volume_value.set(input.value().parse().unwrap());
+            }
+        }
+    };
+    html! {
+        <div>
+            <label for={component_id.clone()} class="mb-2 inline-block text-neutral-200 text-sm">{format!("Volume: {}%", *volume_value)}</label>
+            <input type="range" onchange={on_change} value={volume_value.to_string()} class="transparent h-1.5 w-full cursor-pointer appearance-none rounded-lg border-transparent bg-neutral-200" id={component_id} />
+        </div>
     }
 }
 
@@ -106,26 +168,16 @@ pub struct PianoRollComponentProperties {
 
 #[function_component(PianoRollComponent)]
 pub fn piano_roll(props: &PianoRollComponentProperties) -> Html {
+    let keys = MidiKey::VALUES.iter().rev()
+        .copied()
+        .map(|midi_key| {
+            html! {
+                <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={midi_key}/>
+            }
+        }).collect::<Html>();
     html! {
         <div class="grid grid-cols-1">
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::F4}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::E4}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Eb4}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::D4}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Db4}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::C4}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::B3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Bb3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::A3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Ab3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::G3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Gb3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::F3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::E3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Eb3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::D3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::Db3}/>
-            <PianoRollKeyComponent instrument_name={props.instrument_name} midi_key={MidiKey::C3}/>
+            {keys}
         </div>
     }
 }

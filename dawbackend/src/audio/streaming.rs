@@ -2,6 +2,7 @@ use std::{net::SocketAddr, time::Duration, ops::ControlFlow};
 use axum::extract::ws::{WebSocket, Message};
 use dawlib::InstrumentPayloadDto;
 use futures::{StreamExt, stream::SplitSink, SinkExt};
+use tracing::{error, warn, debug};
 
 use crate::audio::MusicBox;
 
@@ -11,13 +12,13 @@ pub async fn handle_connection(socket: WebSocket, who: SocketAddr) {
 
     loop {
         if let Some(msg) = receiver.next().await {
-            println!("There is a mesage");
+            debug!("Received message.");
             if let Ok(msg) = msg {
                 if process_message(msg, who, &mut sender).await.is_break() {
                     return;
                 }
             } else {
-                println!("client {who} abruptly disconnected");
+                error!("Client {who} abruptly disconnected");
                 return;
             }
         } else {
@@ -30,12 +31,11 @@ pub async fn handle_connection(socket: WebSocket, who: SocketAddr) {
 async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<WebSocket, Message>) -> ControlFlow<(), ()> {
     match msg {
         Message::Text(t) => {
-            println!(">>> {} sent str: {:?}", who, t);
             if let Ok(payload) = serde_json::from_str::<InstrumentPayloadDto>(&t) {
                 let chunks = MusicBox::generate(&payload.instruments);
 
                 for (index, chunk) in chunks.into_iter().enumerate() {            
-                    println!("Sent chunk {index}");
+                    debug!("Sent chunk {index}");
                     let bytes = chunk.into_iter()
                         .flat_map(|it| it.to_le_bytes())
                         .collect::<Vec<u8>>();
@@ -51,31 +51,31 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
                 }
                 
             } else {
-                println!(">>> {} sent invalid payload: {:?}", who, t);
+                warn!(">>> {} sent invalid payload: {:?}", who, t);
                 return ControlFlow::Break(());
             }
         }
         Message::Binary(d) => {
-            println!(">>> {} sent {} bytes: {:?}", who, d.len(), d);
+            debug!(">>> {} sent {} bytes: {:?}", who, d.len(), d);
         }
         Message::Close(c) => {
             if let Some(cf) = c {
-                println!(
+                debug!(
                     ">>> {} sent close with code {} and reason `{}`",
                     who, cf.code, cf.reason
                 );
             } else {
-                println!(">>> {} somehow sent close message without CloseFrame", who);
+                error!(">>> {} somehow sent close message without CloseFrame", who);
             }
             return ControlFlow::Break(());
         }
 
         Message::Pong(v) => {
-            println!(">>> {} sent pong with {:?}", who, v);
+            debug!(">>> {} sent pong with {:?}", who, v);
         }
 
         Message::Ping(v) => {
-            println!(">>> {} sent ping with {:?}", who, v);
+            debug!(">>> {} sent ping with {:?}", who, v);
         }
     }
     ControlFlow::Continue(())
