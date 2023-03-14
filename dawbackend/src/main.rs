@@ -18,6 +18,7 @@ use axum::extract::connect_info::ConnectInfo;
 mod audio;
 mod track;
 mod dal;
+mod error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>>{

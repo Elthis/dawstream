@@ -17,7 +17,7 @@ pub struct InstrumentDto {
     pub notes: HashMap<usize, Vec<MidiKey>>
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SoundOutputPacket {
     End,
     Data {
@@ -53,7 +53,7 @@ impl TryFrom<(Vec<u8>, usize)> for SoundOutputPacket {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ChannelData {
     Mono(Vec<f32>),
     Stereo(Vec<f32>, Vec<f32>)
@@ -166,3 +166,36 @@ impl From<reqwest::Error> for DawstreamBackendClientError {
     }
 }
 
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_channel_data_mono() -> Result<(), String> {
+        // given
+        let channel_data = ChannelData::Mono(vec![13.0; 44100]);
+
+        // when
+        let bytes = Vec::<u8>::from(channel_data.clone());
+
+        // then
+        assert_eq!(ChannelData::try_from((bytes, 44100))?, channel_data);
+        Ok(())
+    }
+
+
+    #[test]
+    fn test_channel_data_stereo() -> Result<(), String> {
+        // given
+        let channel_data = ChannelData::Stereo(vec![13.0; 44100], vec![15.0; 44100]);
+
+        // when
+        let bytes = Vec::<u8>::from(channel_data.clone());
+
+        // then
+        assert_eq!(ChannelData::try_from((bytes, 44100))?, channel_data);
+        Ok(())
+    }
+}
