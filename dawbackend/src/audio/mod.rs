@@ -1,145 +1,120 @@
 use dawlib::InstrumentDto;
-use wavegen::{Waveform, wf, WaveformIterator, sawtooth, square, sine};
+use wavegen::{Waveform, wf, sawtooth, square, sine, Precision, SampleType};
 
 pub mod streaming;
 
+const DEFAULT_SAMPLE_RATE: f32 = 44100.0;
 
-pub struct MusicBox;
+pub struct MusicBox {
+    instruments: Vec<InstrumentDto>,
+    playing_instruments: Vec<PlayedWaveform<f32, f32>>,
+    current_sample: usize
+}
+
+impl Iterator for MusicBox {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.instruments.is_empty() && self.playing_instruments.is_empty() {
+            return None;
+        }
+
+        self.update_state();
+        
+        let current_instrument_count = self.playing_instruments.len() as f32;
+
+        let sample = self.playing_instruments.iter()
+            .map(|instrument| instrument.nth(self.current_sample) / current_instrument_count)
+            .sum::<f32>();
+
+        self.current_sample += 1;
+
+        Some(sample)
+    }
+}
+
+struct PlayedWaveform<T: SampleType, P: Precision> {
+    waveform: Waveform<T, P>,
+    start_offset: usize,
+    end: usize
+}
+
+impl <T: SampleType + std::ops::Mul<f32, Output = T>, P: Precision> PlayedWaveform<T, P> {
+    const EDGE_SMOOTH: f32 = 400.0;
+    pub fn new(waveform: Waveform<T, P>, start_offset: usize, end: usize) -> PlayedWaveform<T, P> {
+        PlayedWaveform {
+            waveform,
+            start_offset,
+            end
+        }
+    }
+
+    pub fn nth(&self, n: usize) -> T {
+        let local_offest = n - self.start_offset;
+        let edge_smoother = 1.0f32.min(local_offest as f32 / Self::EDGE_SMOOTH).min((self.end - n) as f32 / Self::EDGE_SMOOTH);
+        self.waveform.iter().nth(local_offest).unwrap() * edge_smoother
+    }
+}
 
 impl MusicBox {
-    pub fn generate(instruments: &Vec<InstrumentDto>) -> Vec<Vec<f32>> {
-        let mut sawtooth = vec![];
-        let mut sine = vec![];
-        let mut square = vec![];
-        let end = instruments.iter().filter_map(|instrument| {
-            instrument.notes.keys().max().copied()
-        }).max();
+    pub fn new(instruments: Vec<InstrumentDto>) -> Self { 
+        Self { 
+            instruments, 
+            playing_instruments: vec![], 
+            current_sample: 0 
+        } 
+    }
 
-        if end.is_none() {
-            return vec![];
-        }
+    pub fn chunk<const SIZE: usize>(&mut self) -> Result<Vec<f32>, Vec<f32>> {
+        let mut output = Vec::with_capacity(SIZE);
 
-        let end = end.unwrap();
-
-        if let Some(sawtooth_instrument) = instruments.iter().find(|instrument| instrument.name == "sawtooth")  {
-            for i in 0..=end {
-                if let Some(notes) = sawtooth_instrument.notes.get(&i) {
-                    let waveforms = notes.iter()
-                    .map(|key| wf!(f32, 44100., sawtooth!(key.frequency())))
-                    .collect::<Vec<Waveform<f32>>>();
-
-                    let mut waveforms_iterators = waveforms.iter()
-                    .map(|waveform| waveform.iter())
-                    .collect::<Vec<WaveformIterator<f32, _>>>();
-
-                    let divisor = waveforms.len() as f32;
-                    let second = (0..44100).map(|_| {
-                        waveforms_iterators.iter_mut()
-                        .map(|waveform| waveform.next().unwrap() / divisor)
-                        .sum()
-                    }).collect::<Vec<f32>>();
- 
-                    sawtooth.push(Some(second));
-                } else {
-                    sawtooth.push(None);
-                }
-            }
-        } else {
-            for _ in 0..=end {
-                sawtooth.push(None);
+        for _ in 0..SIZE {
+            if let Some(sample) = self.next() {
+                output.push(sample);
+            } else {
+                return Err(output);
             }
         }
 
-        if let Some(sawtooth_instrument) = instruments.iter().find(|instrument| instrument.name == "sine")  {
-            for i in 0..=end {
-                if let Some(notes) = sawtooth_instrument.notes.get(&i) {
-                    let waveforms = notes.iter()
-                    .map(|key| wf!(f32, 44100., sine!(key.frequency())))
-                    .collect::<Vec<Waveform<f32>>>();
+        Ok(output)   
+    }
 
-                    let mut waveforms_iterators = waveforms.iter()
-                    .map(|waveform| waveform.iter())
-                    .collect::<Vec<WaveformIterator<f32, _>>>();
+    fn update_state(&mut self) {
+        let current_second = self.current_sample / DEFAULT_SAMPLE_RATE as usize;
 
-                    let divisor = waveforms.len() as f32;
-                    let second = (0..44100).map(|_| {
-                        waveforms_iterators.iter_mut()
-                        .map(|waveform| waveform.next().unwrap() / divisor)
-                        .sum()
-                    }).collect::<Vec<f32>>();
- 
-                    sine.push(Some(second));
-                } else {
-                    sine.push(None);
-                }
-            } 
-        } else {
-            for _ in 0..=end {
-                sine.push(None);
-            }
+        if self.current_sample % DEFAULT_SAMPLE_RATE as usize != 0 {
+            return;
         }
 
-        if let Some(sawtooth_instrument) = instruments.iter().find(|instrument| instrument.name == "square")  {
-            for i in 0..=end {
-                if let Some(notes) = sawtooth_instrument.notes.get(&i) {
-                    let waveforms = notes.iter()
-                    .map(|key| wf!(f32, 44100., square!(key.frequency())))
-                    .collect::<Vec<Waveform<f32>>>();
+        self.playing_instruments.retain(|playing| playing.end > self.current_sample);
 
-                    let mut waveforms_iterators = waveforms.iter()
-                    .map(|waveform| waveform.iter())
-                    .collect::<Vec<WaveformIterator<f32, _>>>();
-
-                    let divisor = waveforms.len() as f32;
-                    let second = (0..44100).map(|_| {
-                        waveforms_iterators.iter_mut()
-                        .map(|waveform| waveform.next().unwrap() / divisor)
-                        .sum()
-                    }).collect::<Vec<f32>>();
- 
-                    square.push(Some(second));
-                } else {
-                    square.push(None);
-                }
-            }
-        } else {
-            for _ in 0..=end {
-                square.push(None);
-            }
-        }
-        
-        let zipped_fragments = sawtooth.into_iter().zip(sine.into_iter()).zip(square.into_iter())
-        .map(|((saw, sine), square)| {
-            vec![saw, sine, square]
-        }).collect::<Vec<_>>();
-
-        zipped_fragments.into_iter().map(|fragment|{
-            let mut fragment_chunks = fragment.into_iter()
+        let mut new_instruments = self.instruments.iter()
+            .filter_map(|instrument| {
+                let notes = instrument.notes.get(&current_second)?;
+                Some(match instrument.name.as_str() {
+                    "sawtooth" => notes.iter()
+                        .map(|note| wf!(f32, 44100., sawtooth!(note.frequency(), 0.1)))
+                        .collect::<Vec<_>>(),
+                    "sine" => notes.iter()
+                        .map(|note| wf!(f32, 44100., sine!(note.frequency())))
+                        .collect::<Vec<_>>(),
+                    "square" => notes.iter()
+                        .map(|note| wf!(f32, 44100., square!(note.frequency(), 0.1)))
+                        .collect::<Vec<_>>(),
+                    _ => todo!()
+                })
+            })
             .flatten()
+            .map(|waveform| PlayedWaveform::new(waveform, self.current_sample, (current_second + 1) * DEFAULT_SAMPLE_RATE as usize))
             .collect::<Vec<_>>();
 
-            if fragment_chunks.is_empty() {
-                vec![0.0f32; 88200]
-            } else {
-                let count = fragment_chunks.len() as f32;
-                let mut result = fragment_chunks.pop().unwrap();
-                for item in result.iter_mut() {
-                    *item /= count;
-                }
-                for other_chunk in fragment_chunks {
-                    for (index, value) in other_chunk.iter().enumerate() {
-                        result[index] += *value / count;
-                    }
-                }
+        self.playing_instruments.append(&mut new_instruments);
 
-                for i in 0..400 {
-                    result[i] *= i as f32 / 400.;
-                    result[44100 - i - 1] *= i as f32 / 400.;
-                }
+        self.instruments.iter_mut()
+            .for_each(|instrument| {
+                instrument.notes.retain(|second, _| *second > current_second)
+            });
 
-                result.append(&mut result.clone());
-                result
-            }
-        }).collect::<Vec<Vec<f32>>>()
+        self.instruments.retain(|instrument| !instrument.notes.is_empty());
     }
 }

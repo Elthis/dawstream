@@ -32,13 +32,19 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
     match msg {
         Message::Text(t) => {
             if let Ok(payload) = serde_json::from_str::<InstrumentPayloadDto>(&t) {
-                let chunks = MusicBox::generate(&payload.instruments);
+                let mut music_box = MusicBox::new(payload.instruments);
+                let mut index = 0;
+                while let Ok(chunk) = music_box.chunk::<44100>() {
+                    let mut bytes = chunk.into_iter()
+                    .flat_map(|it| it.to_le_bytes())
+                    .collect::<Vec<u8>>();
 
-                for (index, chunk) in chunks.into_iter().enumerate() {            
-                    debug!("Sent chunk {index}");
-                    let bytes = chunk.into_iter()
-                        .flat_map(|it| it.to_le_bytes())
-                        .collect::<Vec<u8>>();
+
+                    bytes.append(&mut bytes.clone());
+
+                    debug!("Sending chunk {index}");
+                
+                    index += 1;
             
                         
                     if sender
@@ -48,8 +54,7 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
                     {
                         return ControlFlow::Break(());
                     }
-                }
-                
+                }          
             } else {
                 warn!(">>> {} sent invalid payload: {:?}", who, t);
                 return ControlFlow::Break(());

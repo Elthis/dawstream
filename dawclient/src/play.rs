@@ -47,11 +47,11 @@ impl AudioStreamer {
 
     fn state(&self) -> StreamerState {
         if !self.scheduled.is_empty() {
-            StreamerState::PLAYING
+            StreamerState::Playing
         } else if !self.chunks.is_empty() {
-            StreamerState::WAITING
+            StreamerState::Waiting
         } else {
-            StreamerState::EMPTY
+            StreamerState::Empty
         }
     }
 
@@ -117,15 +117,15 @@ impl AudioStreamer {
 
 
 enum StreamerState {
-    EMPTY,
-    PLAYING,
-    WAITING
+    Empty,
+    Playing,
+    Waiting
 }
 
 
 #[function_component(PlayButtonComponent)]
 pub fn play_button() -> Html {
-    let audio_streamer_state = use_state(|| StreamerState::EMPTY);
+    let audio_streamer_state = use_state(|| StreamerState::Empty);
     let audio_streamer = use_state(|| Rc::new(RwLock::new(AudioStreamer::empty().unwrap())));
 
     {
@@ -152,7 +152,7 @@ pub fn play_button() -> Html {
     };
 
     match *audio_streamer_state {
-        StreamerState::EMPTY => {
+        StreamerState::Empty => {
             let download = move |_| {
                 worker_bridge.send(AudioStreamingWorkerInput::SendInstrument(
                     instruments.as_ref().clone().into()
@@ -162,7 +162,7 @@ pub fn play_button() -> Html {
                 <button class={format!("bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={download}> {"↓"} </button>
             }
         },
-        StreamerState::PLAYING => {
+        StreamerState::Playing => {
             let stop = move |_| {
                 audio_streamer.write().unwrap().stop().unwrap();
                 audio_streamer_state.set(audio_streamer.read().unwrap().state());
@@ -171,7 +171,7 @@ pub fn play_button() -> Html {
                 <button class="bg-transparent hover:bg-gray-500 text-sm text-white font-semibold py-0 px-1 border border-gray-500 hover:border-transparent rounded h-7 w-7" onclick={stop}> {"■"} </button>
             }
         },
-        StreamerState::WAITING => {
+        StreamerState::Waiting => {
             let play = move |_| {
                 audio_streamer.write().unwrap().play().unwrap();
                 audio_streamer_state.set(audio_streamer.read().unwrap().state());

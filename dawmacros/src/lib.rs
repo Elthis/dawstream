@@ -6,7 +6,6 @@ use syn::Ident;
 use quote::quote;
 
 // A0 = 21
-
 fn get_key(index: usize) -> (bool, syn::Ident) {
     let (is_step_key, name) = match (index - 21) % 12 {
         0 => (false, "A"),

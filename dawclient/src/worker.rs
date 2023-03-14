@@ -1,10 +1,10 @@
-use std::{sync::RwLock, collections::HashSet, rc::Rc};
+use std::{collections::HashSet, rc::Rc};
 
 use dawlib::InstrumentPayloadDto;
-use futures::{StreamExt, stream::SplitSink, SinkExt};
+use futures::{StreamExt, stream::SplitSink, SinkExt, lock::Mutex};
 use gloo_net::websocket::{Message, futures::WebSocket};
 use serde::{Serialize, Deserialize};
-use yew::platform::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use yew_agent::{WorkerLink, Public, HandlerId};
 use gloo_console::log;
 
@@ -12,8 +12,8 @@ use crate::play::CHUNK_LENGTH;
 
 pub struct AudioStreamingWorker {
     _link: WorkerLink<Self>,
-    write_socket: Rc<RwLock<SplitSink<WebSocket, gloo_net::websocket::Message>>>,
-    listeners: Rc<RwLock<HashSet<HandlerId>>>
+    write_socket: Rc<Mutex<SplitSink<WebSocket, gloo_net::websocket::Message>>>,
+    listeners: Rc<Mutex<HashSet<HandlerId>>>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -35,7 +35,7 @@ impl yew_agent::Worker for AudioStreamingWorker {
     fn create(link: WorkerLink<Self>) -> Self {
         let ws = WebSocket::open("ws://localhost:3000/ws").unwrap();
         let (write_socket, mut read_socket) = ws.split();
-        let listeners = Rc::new(RwLock::new(HashSet::new()));
+        let listeners = Rc::new(Mutex::new(HashSet::new()));
         
         {
             let link = link.clone();
@@ -58,7 +58,7 @@ impl yew_agent::Worker for AudioStreamingWorker {
                                     let second_channel = chunks.next().unwrap().to_vec();
                                     let chunk = vec![first_channel, second_channel].clone();
                                     
-                                    for listener in listeners.read().unwrap().iter() {
+                                    for listener in listeners.lock().await.iter() {
                                         link.respond(*listener, AudioStreamingWorkerOutput::Chunk(chunk.clone()))
                                     }
                                 } 
@@ -75,15 +75,21 @@ impl yew_agent::Worker for AudioStreamingWorker {
         }
         
 
-        Self { _link: link, write_socket: Rc::new(RwLock::new(write_socket)), listeners }
+        Self { _link: link, write_socket: Rc::new(Mutex::new(write_socket)), listeners }
     }
 
-    fn connected(&mut self, id: HandlerId) { 
-        self.listeners.write().unwrap().insert(id);
+    fn connected(&mut self, id: HandlerId) {
+        let listeners = self.listeners.clone();
+        spawn_local(async move {
+            listeners.lock().await.insert(id);
+        })
     }
 
     fn disconnected(&mut self, id: HandlerId) {
-        self.listeners.write().unwrap().remove(&id);
+        let listeners = self.listeners.clone();
+        spawn_local(async move {
+            listeners.lock().await.remove(&id);
+        })
     }
 
     fn update(&mut self, _msg: Self::Message) {
@@ -96,7 +102,7 @@ impl yew_agent::Worker for AudioStreamingWorker {
                 let write_socket = self.write_socket.clone();
 
                 spawn_local(async move {
-                    write_socket.write().unwrap().send(Message::Text(serde_json::to_string(&payload).unwrap())).await.unwrap();
+                    write_socket.lock().await.send(Message::Text(serde_json::to_string(&payload).unwrap())).await.unwrap();
                     log!("Sent Something")
                 });
                 

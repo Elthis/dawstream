@@ -24,14 +24,16 @@ pub struct DawstreamBackendClient {
     client: reqwest::Client
 }
 
-impl DawstreamBackendClient {
-    pub fn new() -> DawstreamBackendClient {
+impl Default for DawstreamBackendClient {
+    fn default() -> DawstreamBackendClient {
         let client = reqwest::ClientBuilder::new().build().unwrap();
         DawstreamBackendClient {
             client
         }
     }
+}
 
+impl DawstreamBackendClient {
     pub async fn store_state(&self, state: &InstrumentPayloadDto) -> Result<(), DawstreamBackendClientError> {
         let request = self.client.post(format!("{HOST}{TRACKS_ENDPOINT}"))
         .header("content-type", "application/json")

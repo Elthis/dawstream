@@ -44,7 +44,7 @@ pub fn top_nav() -> Html {
     let on_store = move |_|  {
         let instrument_state = instrument_state.clone();
         spawn_local(async move {
-            let client =  DawstreamBackendClient::new();
+            let client =  DawstreamBackendClient::default();
             
             client.store_state(&instrument_state.as_ref().clone().into()).await.unwrap();
         });
@@ -53,7 +53,7 @@ pub fn top_nav() -> Html {
     let on_restore = move |_| { 
         let instrument_state_dispatch = instrument_state_dispatch.clone();
         spawn_local(async move {
-            let client =  DawstreamBackendClient::new();
+            let client =  DawstreamBackendClient::default();
             let restored_state = client.restore_state().await.unwrap();
             instrument_state_dispatch.set(restored_state.into());
         })

@@ -100,7 +100,6 @@ pub fn instrument(props: &InstrumentComponentProperties) -> Html {
     };
 
     let on_visibility_click = {
-        let is_piano_roll_visible = is_piano_roll_visible.clone();
         move |_| {
             is_piano_roll_visible.set(!*is_piano_roll_visible)
         }   
