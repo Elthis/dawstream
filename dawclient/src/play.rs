@@ -18,9 +18,17 @@ pub enum Message {
 #[derive(Debug, Clone, PartialEq)]
 struct AudioStreamer {
     ctx: AudioContext,
-    chunks: Vec<Vec<Vec<f32>>>,
-    scheduled: Vec<AudioBufferSourceNode>,
-    on_end: Option<Callback<(), ()>>
+    state: AudioStreamerState
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum AudioStreamerState {
+    Stopped, 
+    Started,
+    Playing { 
+        next_offset: f64,  
+        scheduled: Vec<AudioBufferSourceNode>,
+    }
 }
 
 impl Drop for AudioStreamer {
@@ -39,85 +47,109 @@ impl AudioStreamer {
 
         Ok(Self {
             ctx,
-            chunks: vec![],
-            scheduled: vec![],
-            on_end: None
+            state: AudioStreamerState::Stopped
         })
     }
 
     fn state(&self) -> StreamerState {
-        if !self.scheduled.is_empty() {
-            StreamerState::Playing
-        } else if !self.chunks.is_empty() {
-            StreamerState::Waiting
-        } else {
-            StreamerState::Empty
+        match &self.state {
+            AudioStreamerState::Stopped => StreamerState::Waiting,
+            AudioStreamerState::Playing { .. } => StreamerState::Playing,
+            AudioStreamerState::Started => StreamerState::Playing,
         }
     }
 
-    fn set_on_ended(&mut self, callback: Callback<(), ()> ) {
-        self.on_end = Some(callback);
-    }
-
-    fn push_chunk(&mut self, chunk: Vec<Vec<f32>>) {
-        self.chunks.push(chunk);
-    }
-
-
-    fn play(&mut self) -> Result<(), JsValue> {
-        self.stop()?;
-        let current_time = self.ctx.current_time();
-        let last_chunk_index = self.chunks.len() - 1;
-        for (index, chunk) in self.chunks.iter().enumerate() {
-            let audio_buffer =
-            self.ctx.create_buffer(2, (self.ctx.sample_rate()) as u32 * CHUNK_LENGTH, self.ctx.sample_rate())?;
-
-            for (channel_number, channel_data) in chunk.iter().enumerate() {
-                audio_buffer.copy_to_channel_with_start_in_channel(channel_data, channel_number as i32, 0)?;
-            }
-
-            let buffer_source = self.ctx.create_buffer_source().unwrap();
-            buffer_source.set_buffer(Some(&audio_buffer));
-            buffer_source.connect_with_audio_node(
-                wasm_bindgen::JsCast::dyn_ref::<AudioNode>(&self.ctx.destination()).unwrap(),
-            ).unwrap();
-            let on_end = self.on_end.clone();
-
-            if index == last_chunk_index {
-                let cb: Closure<dyn FnMut() -> Result<(), JsValue>> = Closure::new(move || {
-                    if let Some(on_end) = &on_end {
-                        on_end.emit(());
-                    }         
+    fn attach_to_last(&mut self, callback: Callback<(), ()>) -> Result<(), JsValue> {
+        match &mut self.state {
+            AudioStreamerState::Stopped => Ok(()),
+            AudioStreamerState::Started => Ok(()),
+            AudioStreamerState::Playing { scheduled, .. } => {
+                if let Some(last) = scheduled.last() {
+                    let cb: Closure<dyn FnMut() -> Result<(), JsValue>> = Closure::new(move || {
+                        callback.emit(());      
+                        Ok(())
+                    });
+                    last
+                        .add_event_listener_with_callback("ended", cb.as_ref().unchecked_ref())?;
+                    cb.forget();
                     Ok(())
-                });
-                buffer_source
-                    .add_event_listener_with_callback("ended", cb.as_ref().unchecked_ref()).unwrap();
-                cb.forget();
-            }
-            
-            
-            buffer_source.start_with_when(index as f64 * CHUNK_LENGTH as f64 + current_time).unwrap();
-            
-            self.scheduled.push(buffer_source);
+                } else {
+                    Ok(())
+                }
+            },
         }
+    }
 
-        self.chunks.clear();
+    fn play(&mut self) {
+        if matches!(self.state, AudioStreamerState::Stopped) {
+            self.state = AudioStreamerState::Started;
+        }
+    }
 
-        Ok(())
+    fn play_chunk(&mut self, chunk: Vec<Vec<f32>>) -> Result<(), JsValue> {
+        match &mut self.state {
+            AudioStreamerState::Playing { next_offset, scheduled } => {
+                let audio_buffer =
+                self.ctx.create_buffer(2, (self.ctx.sample_rate()) as u32 * CHUNK_LENGTH, self.ctx.sample_rate())?;
+
+                for (channel_number, channel_data) in chunk.iter().enumerate() {
+                    audio_buffer.copy_to_channel_with_start_in_channel(channel_data, channel_number as i32, 0)?;
+                }
+
+                let buffer_source = self.ctx.create_buffer_source().unwrap();
+                buffer_source.set_buffer(Some(&audio_buffer));
+                buffer_source.connect_with_audio_node(
+                    wasm_bindgen::JsCast::dyn_ref::<AudioNode>(&self.ctx.destination()).unwrap(),
+                ).unwrap();
+    
+                buffer_source.start_with_when(*next_offset as f64).unwrap();
+                *next_offset += 1_f64;
+    
+                scheduled.push(buffer_source);
+
+                Ok(())
+            }
+            AudioStreamerState::Started =>  {
+                let audio_buffer =
+                self.ctx.create_buffer(2, (self.ctx.sample_rate()) as u32 * CHUNK_LENGTH, self.ctx.sample_rate())?;
+
+                for (channel_number, channel_data) in chunk.iter().enumerate() {
+                    audio_buffer.copy_to_channel_with_start_in_channel(channel_data, channel_number as i32, 0)?;
+                }
+
+                let buffer_source = self.ctx.create_buffer_source().unwrap();
+                buffer_source.set_buffer(Some(&audio_buffer));
+                buffer_source.connect_with_audio_node(
+                    wasm_bindgen::JsCast::dyn_ref::<AudioNode>(&self.ctx.destination()).unwrap(),
+                ).unwrap();
+
+                let current_offset = self.ctx.current_time();
+                buffer_source.start_with_when(current_offset).unwrap();
+    
+                self.state = AudioStreamerState::Playing { next_offset: current_offset + 1_f64, scheduled: vec![buffer_source] };
+                Ok(())
+            },
+            AudioStreamerState::Stopped => Ok(()),
+        }
     }
 
     fn stop(&mut self) -> Result<(), JsValue> {
-        for node in &self.scheduled {
-            node.stop()?;
-        }
-        self.scheduled.clear();
+        match &self.state {
+            AudioStreamerState::Stopped => { },
+            AudioStreamerState::Playing { scheduled, .. } => {
+                for node in scheduled {
+                    node.stop()?;
+                }
+            },
+            AudioStreamerState::Started => { },
+        };
+        self.state = AudioStreamerState::Stopped;
         Ok(())
     }
 }
 
 
 enum StreamerState {
-    Empty,
     Playing,
     Waiting
 }
@@ -125,17 +157,8 @@ enum StreamerState {
 
 #[function_component(PlayButtonComponent)]
 pub fn play_button() -> Html {
-    let audio_streamer_state = use_state(|| StreamerState::Empty);
+    let audio_streamer_state = use_state(|| StreamerState::Waiting);
     let audio_streamer = use_state(|| Rc::new(RwLock::new(AudioStreamer::empty().unwrap())));
-
-    {
-        let audio_streamer_state = audio_streamer_state.clone();
-        let audio_streamer_handle = audio_streamer.clone();
-        audio_streamer.write().unwrap().set_on_ended(Callback::from(move |_| {
-            audio_streamer_handle.write().unwrap().stop().unwrap();
-            audio_streamer_state.set(audio_streamer_handle.read().unwrap().state());
-        }));
-    }
 
     let instruments = use_store_value::<InstrumentState>();
     let worker_bridge = {
@@ -144,24 +167,22 @@ pub fn play_button() -> Html {
         use_bridge::<AudioStreamingWorker, _>(move |response| {
             match response {
                 AudioStreamingWorkerOutput::Chunk(chunk) => {
-                    audio_streamer.write().unwrap().push_chunk(chunk);
+                    audio_streamer.write().unwrap().play_chunk(chunk).unwrap();
                     audio_streamer_state.set(audio_streamer.read().unwrap().state());
+                }
+                AudioStreamingWorkerOutput::End => {
+                    let audio_streamer_state = audio_streamer_state.clone();
+                    let audio_streamer_handle = audio_streamer.clone();
+                    audio_streamer.write().unwrap().attach_to_last(Callback::from(move |_| {
+                        audio_streamer_handle.write().unwrap().stop().unwrap();
+                        audio_streamer_state.set(audio_streamer_handle.read().unwrap().state());
+                    })).unwrap();
                 }
             }
         })
     };
 
     match *audio_streamer_state {
-        StreamerState::Empty => {
-            let download = move |_| {
-                worker_bridge.send(AudioStreamingWorkerInput::SendInstrument(
-                    instruments.as_ref().clone().into()
-                ));
-            };
-            html! {
-                <button class={format!("bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={download}> {"↓"} </button>
-            }
-        },
         StreamerState::Playing => {
             let stop = move |_| {
                 audio_streamer.write().unwrap().stop().unwrap();
@@ -173,8 +194,10 @@ pub fn play_button() -> Html {
         },
         StreamerState::Waiting => {
             let play = move |_| {
-                audio_streamer.write().unwrap().play().unwrap();
-                audio_streamer_state.set(audio_streamer.read().unwrap().state());
+                audio_streamer.write().unwrap().play();
+                worker_bridge.send(AudioStreamingWorkerInput::SendInstrument(
+                    instruments.as_ref().clone().into()
+                ));
             };
             html! {
                 <button class={format!("bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={play}> {"⏵"} </button>

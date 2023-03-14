@@ -1,14 +1,12 @@
 use std::{collections::HashSet, rc::Rc};
 
-use dawlib::InstrumentPayloadDto;
+use dawlib::{InstrumentPayloadDto, SoundOutputPacket};
 use futures::{StreamExt, stream::SplitSink, SinkExt, lock::Mutex};
 use gloo_net::websocket::{Message, futures::WebSocket};
 use serde::{Serialize, Deserialize};
 use wasm_bindgen_futures::spawn_local;
 use yew_agent::{WorkerLink, Public, HandlerId};
 use gloo_console::log;
-
-use crate::play::CHUNK_LENGTH;
 
 pub struct AudioStreamingWorker {
     _link: WorkerLink<Self>,
@@ -23,7 +21,8 @@ pub enum AudioStreamingWorkerInput {
 
 #[derive(Serialize, Deserialize)]
 pub enum AudioStreamingWorkerOutput {
-    Chunk(Vec<Vec<f32>>)
+    Chunk(Vec<Vec<f32>>),
+    End
 }
 
 impl yew_agent::Worker for AudioStreamingWorker {
@@ -49,18 +48,28 @@ impl yew_agent::Worker for AudioStreamingWorker {
                                     log!(format!("Text: {:#?}", value));
                                 }
                                 gloo_net::websocket::Message::Bytes(bytes) => {
-                                    let samples = bytes.chunks_exact(4)
-                                    .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
-                                    .collect::<Vec<f32>>();
-                                    let mut chunks = samples.chunks_exact(44100 * CHUNK_LENGTH as usize);
-                                    
-                                    let first_channel = chunks.next().unwrap().to_vec();
-                                    let second_channel = chunks.next().unwrap().to_vec();
-                                    let chunk = vec![first_channel, second_channel].clone();
-                                    
-                                    for listener in listeners.lock().await.iter() {
-                                        link.respond(*listener, AudioStreamingWorkerOutput::Chunk(chunk.clone()))
-                                    }
+                                    let sound = SoundOutputPacket::try_from((bytes, 44100)).expect("Sumfin went rong");
+                                    match sound {
+                                        SoundOutputPacket::End => {
+                                            for listener in listeners.lock().await.iter() {
+                                                link.respond(*listener, AudioStreamingWorkerOutput::End)
+                                            }
+                                        },
+                                        SoundOutputPacket::Data { channel_data } => {
+                                            let data = match channel_data {
+                                                dawlib::ChannelData::Mono(data) => {
+                                                    vec![data.clone(), data]
+                                                },
+                                                dawlib::ChannelData::Stereo(first_channel, second_channel) => {
+                                                    vec![first_channel, second_channel]
+                                                },
+                                            };
+
+                                            for listener in listeners.lock().await.iter() {
+                                                link.respond(*listener, AudioStreamingWorkerOutput::Chunk(data.clone()))
+                                            }
+                                        },
+                                    }  
                                 } 
                             }
                         },

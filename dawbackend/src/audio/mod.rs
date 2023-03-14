@@ -65,10 +65,10 @@ impl MusicBox {
         } 
     }
 
-    pub fn chunk<const SIZE: usize>(&mut self) -> Result<Vec<f32>, Vec<f32>> {
-        let mut output = Vec::with_capacity(SIZE);
+    pub fn chunk(&mut self, size: usize) -> Result<Vec<f32>, Vec<f32>> {
+        let mut output = Vec::with_capacity(size);
 
-        for _ in 0..SIZE {
+        for _ in 0..size {
             if let Some(sample) = self.next() {
                 output.push(sample);
             } else {

@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, time::Duration, ops::ControlFlow};
 use axum::extract::ws::{WebSocket, Message};
-use dawlib::InstrumentPayloadDto;
+use dawlib::{InstrumentPayloadDto, SoundOutputPacket};
 use futures::{StreamExt, stream::SplitSink, SinkExt};
 use tracing::{error, warn, debug};
 
@@ -34,13 +34,10 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
             if let Ok(payload) = serde_json::from_str::<InstrumentPayloadDto>(&t) {
                 let mut music_box = MusicBox::new(payload.instruments);
                 let mut index = 0;
-                while let Ok(chunk) = music_box.chunk::<44100>() {
-                    let mut bytes = chunk.into_iter()
-                    .flat_map(|it| it.to_le_bytes())
-                    .collect::<Vec<u8>>();
-
-
-                    bytes.append(&mut bytes.clone());
+                while let Ok(chunk) = music_box.chunk(44100) {
+                    let output = SoundOutputPacket::Data { 
+                        channel_data: dawlib::ChannelData::Mono(chunk) 
+                    };
 
                     debug!("Sending chunk {index}");
                 
@@ -48,13 +45,21 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
             
                         
                     if sender
-                        .send(Message::Binary(bytes))
+                        .send(Message::Binary(output.into()))
                         .await
                         .is_err()
                     {
                         return ControlFlow::Break(());
                     }
-                }          
+                }  
+                debug!("Sending end.");
+                if sender
+                        .send(Message::Binary(SoundOutputPacket::End.into()))
+                        .await
+                        .is_err()
+                {
+                    return ControlFlow::Break(());
+                }
             } else {
                 warn!(">>> {} sent invalid payload: {:?}", who, t);
                 return ControlFlow::Break(());
