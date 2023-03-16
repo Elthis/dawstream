@@ -50,7 +50,20 @@ impl yew_agent::Worker for AudioStreamingWorker {
                                 gloo_net::websocket::Message::Bytes(bytes) => {
                                     let sound = SoundOutputPacket::try_from((bytes, 44100)).expect("Sumfin went rong");
                                     match sound {
-                                        SoundOutputPacket::End => {
+                                        SoundOutputPacket::End { channel_data, ..} => {
+                                            if let Some(channel_data) = channel_data {
+                                                let data = match channel_data {
+                                                    dawlib::ChannelData::Mono(data) => {
+                                                        vec![data.clone(), data]
+                                                    },
+                                                    dawlib::ChannelData::Stereo(first_channel, second_channel) => {
+                                                        vec![first_channel, second_channel]
+                                                    },
+                                                };
+                                                for listener in listeners.lock().await.iter() {
+                                                    link.respond(*listener, AudioStreamingWorkerOutput::Chunk(data.clone()))
+                                                }
+                                            }
                                             for listener in listeners.lock().await.iter() {
                                                 link.respond(*listener, AudioStreamingWorkerOutput::End)
                                             }

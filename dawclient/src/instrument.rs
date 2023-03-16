@@ -8,9 +8,16 @@ use yewdux::{store::Store, prelude::use_store};
 
 use dawlib::{MidiKey, InstrumentPayloadDto, InstrumentDto};
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Store)]
+#[derive(Debug, Clone, PartialEq, Eq, Store)]
 pub struct InstrumentState {
+    pub tempo: usize,
     pub entries: HashMap<String, HashMap<usize, Vec<MidiKey>>>,
+}
+
+impl Default for InstrumentState {
+    fn default() -> Self {
+        Self { tempo: 60, entries: HashMap::new() }
+    }
 }
 
 impl From<InstrumentState> for InstrumentPayloadDto {
@@ -23,7 +30,7 @@ impl From<InstrumentState> for InstrumentPayloadDto {
             }
         }).collect();
 
-        InstrumentPayloadDto { instruments }
+        InstrumentPayloadDto { tempo: state.tempo, instruments }
     }
 }
 
@@ -35,6 +42,7 @@ impl From<InstrumentPayloadDto> for InstrumentState {
         }).collect();
 
         InstrumentState {
+            tempo: payload.tempo,
             entries
         }
     }

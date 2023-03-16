@@ -3,10 +3,11 @@ use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use yewdux::prelude::use_store;
 
-use crate::{play::{PlayButtonComponent}, instrument::{InstrumentsComponent, InstrumentState}};
+use crate::{play::PlayButtonComponent, instrument::{InstrumentsComponent, InstrumentState}, tempo::TempoComponent};
 
 pub mod play;
 pub mod worker;
+pub mod tempo;
 
 mod instrument;
 
@@ -66,6 +67,8 @@ pub fn top_nav() -> Html {
                 <span class="text-xl tracking-tight mr-2" width="54" height="54">{ "🎹" }</span>
                 <span class="font-semibold tracking-tight mr-4">{ "Dawstream" }</span>
                 <PlayButtonComponent/>
+                <span class="mx-1"/>
+                <TempoComponent/>
             </div>
             <div class="inline-block lg:hidden">
                 <button class="flex items-center px-3 py-2 border rounded text-teal-200 border-teal-400 hover:text-white hover:border-white" onclick={onclick}>

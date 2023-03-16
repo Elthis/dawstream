@@ -32,18 +32,36 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
     match msg {
         Message::Text(t) => {
             if let Ok(payload) = serde_json::from_str::<InstrumentPayloadDto>(&t) {
-                let mut music_box = MusicBox::new(payload.instruments);
+                let mut music_box = MusicBox::new(payload.tempo, payload.instruments);
                 let mut index = 0;
-                while let Ok(chunk) = music_box.chunk(44100) {
-                    let output = SoundOutputPacket::Data { 
-                        channel_data: dawlib::ChannelData::Mono(chunk) 
+                let mut is_streaming = true;
+                while is_streaming {
+                    let output = match music_box.chunk(44100) {
+                        Ok(full_chunk) => {
+                            debug!("Sending chunk {index}");
+                            index += 1;
+
+                            SoundOutputPacket::Data { 
+                                channel_data: dawlib::ChannelData::Mono(full_chunk) 
+                            }
+                        },
+                        Err(partial_chunk) => {
+                            is_streaming = false;
+                            debug!("Sending end.");
+                            let length = partial_chunk.len() as u16;
+                            let channel_data = if length != 0 {
+                                Some(dawlib::ChannelData::Mono(partial_chunk))
+                            } else {
+                                None
+                            };
+
+                            SoundOutputPacket::End { 
+                                length,
+                                channel_data
+                            }
+                        },
                     };
 
-                    debug!("Sending chunk {index}");
-                
-                    index += 1;
-            
-                        
                     if sender
                         .send(Message::Binary(output.into()))
                         .await
@@ -51,14 +69,6 @@ async fn process_message(msg: Message, who: SocketAddr, sender: &mut SplitSink<W
                     {
                         return ControlFlow::Break(());
                     }
-                }  
-                debug!("Sending end.");
-                if sender
-                        .send(Message::Binary(SoundOutputPacket::End.into()))
-                        .await
-                        .is_err()
-                {
-                    return ControlFlow::Break(());
                 }
             } else {
                 warn!(">>> {} sent invalid payload: {:?}", who, t);
