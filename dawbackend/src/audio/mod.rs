@@ -8,6 +8,7 @@ const DEFAULT_SAMPLE_RATE: f32 = 44100.0;
 pub struct MusicBox {
     instruments: Vec<InstrumentDto>,
     playing_instruments: Vec<PlayedWaveform<f32, f32>>,
+    samples_per_beat: usize,
     current_sample: usize
 }
 
@@ -57,11 +58,14 @@ impl <T: SampleType + std::ops::Mul<f32, Output = T>, P: Precision> PlayedWavefo
 }
 
 impl MusicBox {
-    pub fn new(instruments: Vec<InstrumentDto>) -> Self { 
+    pub fn new(tempo: usize, instruments: Vec<InstrumentDto>) -> Self { 
+        let modifier = tempo as f32 / 60.0;
+        let samples_per_beat = (DEFAULT_SAMPLE_RATE / modifier) as usize;
         Self { 
             instruments, 
             playing_instruments: vec![], 
-            current_sample: 0 
+            current_sample: 0, 
+            samples_per_beat
         } 
     }
 
@@ -80,9 +84,9 @@ impl MusicBox {
     }
 
     fn update_state(&mut self) {
-        let current_second = self.current_sample / DEFAULT_SAMPLE_RATE as usize;
+        let current_beat = self.current_sample / self.samples_per_beat;
 
-        if self.current_sample % DEFAULT_SAMPLE_RATE as usize != 0 {
+        if self.current_sample % self.samples_per_beat != 0 {
             return;
         }
 
@@ -90,7 +94,7 @@ impl MusicBox {
 
         let mut new_instruments = self.instruments.iter()
             .filter_map(|instrument| {
-                let notes = instrument.notes.get(&current_second)?;
+                let notes = instrument.notes.get(&current_beat)?;
                 Some(match instrument.name.as_str() {
                     "sawtooth" => notes.iter()
                         .map(|note| wf!(f32, 44100., sawtooth!(note.frequency(), 0.1)))
@@ -105,14 +109,14 @@ impl MusicBox {
                 })
             })
             .flatten()
-            .map(|waveform| PlayedWaveform::new(waveform, self.current_sample, (current_second + 1) * DEFAULT_SAMPLE_RATE as usize))
+            .map(|waveform| PlayedWaveform::new(waveform, self.current_sample, self.current_sample + self.samples_per_beat))
             .collect::<Vec<_>>();
 
         self.playing_instruments.append(&mut new_instruments);
 
         self.instruments.iter_mut()
             .for_each(|instrument| {
-                instrument.notes.retain(|second, _| *second > current_second)
+                instrument.notes.retain(|beat, _| *beat > current_beat)
             });
 
         self.instruments.retain(|instrument| !instrument.notes.is_empty());

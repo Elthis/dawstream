@@ -38,7 +38,7 @@ struct MidiKey {
 pub fn generate_keys(_: TokenStream) -> TokenStream {
     let keys = (21..108).map(|key| {
         let (is_step_key, ident) = get_key(key);
-        let frequency = (2.0f64.powf((key as f64- 69.0f64) / 12.0f64) * (440.0f64)) as f32;
+        let frequency = (2.0f64.powf((key as f64 - 69.0f64) / 12.0f64) * (440.0f64)) as f32;
         MidiKey {
             ident,
             frequency,

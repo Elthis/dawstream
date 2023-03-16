@@ -8,6 +8,7 @@ dawmacros::generate_keys!();
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstrumentPayloadDto {
+    pub tempo: usize,
     pub instruments: Vec<InstrumentDto>
 }
 
@@ -19,7 +20,10 @@ pub struct InstrumentDto {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SoundOutputPacket {
-    End,
+    End {
+        length: u16,
+        channel_data: Option<ChannelData>
+    },
     Data {
         channel_data: ChannelData
     },
@@ -28,7 +32,15 @@ pub enum SoundOutputPacket {
 impl From<SoundOutputPacket> for Vec<u8> {
     fn from(packet: SoundOutputPacket) -> Vec<u8> {
         match packet {
-            SoundOutputPacket::End => vec![0x00],
+            SoundOutputPacket::End { length, channel_data } => {
+                let bytes = std::iter::once(0x00).chain(length.to_le_bytes());
+
+                if let Some(channel_data) = channel_data {
+                    bytes.chain(Into::<Vec<u8>>::into(channel_data)).collect()
+                } else {
+                    bytes.collect()
+                }
+            },
             SoundOutputPacket::Data {channel_data } => {
                 std::iter::once(0x01).chain(Into::<Vec<u8>>::into(channel_data)).collect()    
             }
@@ -43,7 +55,19 @@ impl TryFrom<(Vec<u8>, usize)> for SoundOutputPacket {
         let mut data_iterator = data.into_iter();
         let tag_byte = data_iterator.next().ok_or_else(|| "Missing tag byte.".to_string())?;
         match tag_byte {
-            0x00 => Ok(SoundOutputPacket::End),
+            0x00 => {
+                let length = data_iterator.next_tuple()
+                .map(|(b0, b1)| u16::from_le_bytes([b0, b1]))
+                .unwrap();
+
+                let channel_data = if length != 0 {
+                    Some(ChannelData::try_from((data_iterator, length as usize))?)
+                } else {
+                    None
+                };
+
+                Ok(SoundOutputPacket::End { length, channel_data })
+            },
             0x01 => {
                 Ok(SoundOutputPacket::Data { channel_data: ChannelData::try_from((data_iterator, chunk_size))? })
             }
