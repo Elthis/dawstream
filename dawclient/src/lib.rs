@@ -3,11 +3,13 @@ use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use yewdux::prelude::use_store;
 
-use crate::{play::PlayButtonComponent, instrument::{InstrumentsComponent, InstrumentState}, tempo::TempoComponent};
+use crate::{play::PlayButtonComponent, instrument::{InstrumentsComponent, TrackState, ProjectComponent}, tempo::TempoComponent, context_panel::ContextPanel};
 
 pub mod play;
 pub mod worker;
 pub mod tempo;
+pub mod context_panel;
+pub mod document;
 
 mod instrument;
 
@@ -16,11 +18,12 @@ pub fn app() -> Html {
     html! {
         <>      
             <TopNav/>
-            <div class="flex flex-col">
-                <main class="bg-gray-600 flex-grow">
+            <div class="flex flex-col grow">
+                <main class="bg-gray-600 grow">
                     <InstrumentsComponent/>
                 </main>
-            </div>   
+            </div>
+            <ContextPanel/>
         </>
     }
 }
@@ -28,7 +31,7 @@ pub fn app() -> Html {
 
 #[function_component(TopNav)]
 pub fn top_nav() -> Html {
-    let (instrument_state, instrument_state_dispatch) = use_store::<InstrumentState>();
+    let (instrument_state, instrument_state_dispatch) = use_store::<TrackState>();
     let menu_toggle = use_state(|| false);
 
     let onclick = {
@@ -62,20 +65,22 @@ pub fn top_nav() -> Html {
 
 
     html! {
-        <nav class="flex items-center justify-between flex-wrap bg-gray-900 p-3 sticky top-0 z-10">
-            <div class="flex items-center flex-shrink-0 text-white mr-6">
-                <span class="text-xl tracking-tight mr-2" width="54" height="54">{ "🎹" }</span>
-                <span class="font-semibold tracking-tight mr-4">{ "Dawstream" }</span>
+        <nav class="flex items-center justify-between flex-wrap bg-gray-900 sticky top-0 z-10">
+            <div class="flex items-center flex-shrink-0 text-white mr-3 p-3">
+                <div class="w-36">
+                    <span class="text-xl tracking-tight mr-2" width="54" height="54">{ "🎹" }</span>
+                    <span class="font-semibold tracking-tight">{ "Dawstream" }</span>
+                </div>
                 <PlayButtonComponent/>
                 <span class="mx-1"/>
                 <TempoComponent/>
             </div>
-            <div class="inline-block lg:hidden">
-                <button class="flex items-center px-3 py-2 border rounded text-teal-200 border-teal-400 hover:text-white hover:border-white" onclick={onclick}>
+            <div class="inline-block lg:hidden py-3">
+                <button class="flex items-center px-3 py-2 border rounded text-teal-200 border-teal-400 hover:text-white hover:border-white py-3" onclick={onclick}>
                     <svg class="fill-current h-3 w-3" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><title> { "Menu" }</title><path d="M0 3h20v2H0V3zm0 6h20v2H0V9zm0 6h20v2H0v-2z"/></svg>
                 </button>
             </div>
-            <div class={format!("w-full block flex-grow lg:flex lg:items-center lg:w-auto {menu_state} lg:visible")}>
+            <div class={format!("w-full block flex-grow lg:flex lg:items-center lg:w-auto {menu_state} lg:visible py-3")}>
                 <div class="text-sm flex-col lg:flex-grow">
                     <a onclick={on_store} class="block mt-4 lg:inline-block lg:mt-0 text-teal-100 hover:text-white mr-4 cursor-pointer">
                         {"Store"}
@@ -88,6 +93,7 @@ pub fn top_nav() -> Html {
                     </a>
                 </div>
             </div>
+            <ProjectComponent/>
         </nav>
     }
 }

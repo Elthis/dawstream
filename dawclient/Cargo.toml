@@ -36,5 +36,6 @@ features = [
   'OscillatorNode',
   'OscillatorType',
   'MediaStreamAudioDestinationNode', 
-  'MediaStreamTrack'
+  'MediaStreamTrack',
+  'HtmlCollection'
 ]

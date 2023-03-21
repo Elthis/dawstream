@@ -18,10 +18,17 @@ pub async fn restore(State(state): State<AppState>) -> Result<(StatusCode, Json<
         Some(Ok(model)) => {
             Ok((StatusCode::OK, Json(model)))
         },
-        _ => {
+        None => {
             Err(ApiError {
                 status: StatusCode::NOT_FOUND,
                 message: "Track not found.".to_string(),
+            })
+        },
+        Some(Err(other_error)) => {
+            tracing::error!("Error occured {}", other_error);
+            Err(ApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: format!("Unexpected error: {}.", other_error),
             })
         },
     } 

@@ -6,15 +6,16 @@ use serde::{Serialize, Deserialize};
 
 dawmacros::generate_keys!();
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstrumentPayloadDto {
     pub tempo: usize,
     pub instruments: Vec<InstrumentDto>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstrumentDto {
     pub name: String,
+    pub gain: f32,
     pub notes: HashMap<usize, Vec<MidiKey>>
 }
 

@@ -8,7 +8,7 @@ use yew_agent::use_bridge;
 use yew::prelude::*;
 use yewdux::prelude::*;
 
-use crate::{worker::{AudioStreamingWorker, AudioStreamingWorkerInput, AudioStreamingWorkerOutput}, instrument::InstrumentState};
+use crate::{worker::{AudioStreamingWorker, AudioStreamingWorkerInput, AudioStreamingWorkerOutput}, instrument::TrackState};
 
 pub enum Message {
     Click,
@@ -160,7 +160,7 @@ pub fn play_button() -> Html {
     let audio_streamer_state = use_state(|| StreamerState::Waiting);
     let audio_streamer = use_state(|| Rc::new(RwLock::new(AudioStreamer::empty().unwrap())));
 
-    let instruments = use_store_value::<InstrumentState>();
+    let instruments = use_store_value::<TrackState>();
     let worker_bridge = {
         let audio_streamer = audio_streamer.clone();
         let audio_streamer_state = audio_streamer_state.clone();
@@ -200,7 +200,7 @@ pub fn play_button() -> Html {
                 ));
             };
             html! {
-                <button class={format!("bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={play}> {"⏵"} </button>
+                <button class={format!("outline-0 bg-transparent text-white font-semibold py-0 px-1 border border-gray-500 rounded h-7 w-7 hover:bg-gray-500 hover:border-transparent")} onclick={play}> {"⏵"} </button>
             }
         },
     }

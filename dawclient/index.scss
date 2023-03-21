@@ -1,6 +1,9 @@
 body {
+    box-sizing: content-box;
     background-color: rgb(75 85 99);
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 @layer base {
@@ -12,3 +15,20 @@ body {
       -moz-appearance: textfield !important;
     }
  }
+
+ /* For Webkit-based browsers (Chrome, Safari and Opera) */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  scrollbar-gutter: stable;
+}
+
+/* For IE, Edge and Firefox */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.instrument {
+  min-width: 9rem; 
+  max-width: 9rem;
+}

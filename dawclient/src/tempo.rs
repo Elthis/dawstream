@@ -3,11 +3,11 @@ use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yewdux::prelude::*;
 
-use crate::instrument::InstrumentState;
+use crate::instrument::TrackState;
 
 #[function_component(TempoComponent)]
 pub fn tempo_component() -> Html {
-    let (track_state, track_dispatcher) = use_store::<InstrumentState>();
+    let (track_state, track_dispatcher) = use_store::<TrackState>();
 
     let on_input = |event: InputEvent| {
         if let Some(input) = event.target().as_ref().and_then(|target| target.dyn_ref::<HtmlInputElement>()) {
